@@ -11,8 +11,25 @@ android {
         applicationId = "com.theunknown.siasgrades"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.1"
+    }
+
+    // Fixed key so every build is signed the same way and updates install over each other
+    signingConfigs {
+        create("main") {
+            storeFile = file("sias.keystore")
+            storePassword = "siasgrades"
+            keyAlias = "sias"
+            keyPassword = "siasgrades"
+        }
+    }
+
+    buildTypes {
+        release {
+            signingConfig = signingConfigs.getByName("main")
+            isMinifyEnabled = false
+        }
     }
 
     compileOptions {
