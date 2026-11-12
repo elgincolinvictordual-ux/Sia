@@ -27,9 +27,10 @@ private const val MATCH = ViewGroup.LayoutParams.MATCH_PARENT
 private const val WRAP = ViewGroup.LayoutParams.WRAP_CONTENT
 
 // Purple palette
-private const val PURPLE_LIGHT = 0xFFA78BFA.toInt()
-private const val PURPLE_MID = 0xFF7C3AED.toInt()
-private const val PURPLE_DARK = 0xFF5B21B6.toInt()
+private const val PURPLE_LIGHT = 0xFF6D28D9.toInt()
+private const val PURPLE_MID = 0xFF4C1D95.toInt()
+private const val PURPLE_DARK = 0xFF2E1065.toInt()
+private const val PURPLE_DEEP = 0xFF12062B.toInt()
 
 // Injected on every page load.
 // 1. Hooks fetch/XHR and sends the "curreval" response to the app (SiasBridge.onGrades).
@@ -64,7 +65,7 @@ private val HOOK_JS = """
 
   function cls(g) {
     if (g === null) return '__g_na';
-    return g > 3.0 ? '__g_d' : '__g_a';
+    return g > 3.0 ? '__g_d' : '';
   }
 
   function build(model, showAll) {
@@ -74,16 +75,17 @@ private val HOOK_JS = """
       if (!rows.length) return;
       h += '<div class="__g_term"><span>' + esc(t) + '</span><i></i></div>';
       rows.forEach(function (r) {
-        h += '<div class="__g_row"><div class="__g_info"><div class="__g_name">' + esc(r.name) +
-          '</div><div class="__g_meta">' + esc(r.code) + ' &middot; ' + r.u.toFixed(1) + ' units</div></div>' +
-          '<div class="__g_pill ' + cls(r.g) + '">' + (r.g !== null ? r.g.toFixed(2) : '-') + '</div></div>';
+        h += '<div class="__g_row' + (r.g === null ? ' __g_dim' : '') + '"><span class="__g_acc"></span>' +
+          '<div class="__g_info"><div class="__g_name">' + esc(r.name) + '</div>' +
+          '<div class="__g_meta">' + esc(r.code) + ' &middot; ' + r.u.toFixed(1) + ' units</div></div>' +
+          '<div class="__g_g ' + cls(r.g) + '">' + (r.g !== null ? r.g.toFixed(2) : '-') + '</div></div>';
       });
     });
     return h || '<div class="__g_empty">No grades yet</div>';
   }
 
-  function stat(label, value) {
-    return '<div class="__g_stat"><div class="__g_sv">' + value + '</div><div class="__g_sl">' + label + '</div></div>';
+  function chip(label, value) {
+    return '<div class="__g_chip"><em>' + label + '</em><b>' + value + '</b></div>';
   }
 
   function injectStyle() {
@@ -91,35 +93,42 @@ private val HOOK_JS = """
     var st = document.createElement('style');
     st.id = '__g_style';
     st.textContent =
-      '#__g_back{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(30,10,60,.55);z-index:2147483646;opacity:0;transition:opacity .25s}' +
-      '#__g_sheet{position:fixed;left:0;right:0;bottom:0;max-height:88%;display:flex;flex-direction:column;overflow:hidden;background:#faf8ff;color:#1e1b4b;font-family:Roboto,sans-serif;font-size:3.1vw;line-height:1.3;border-radius:1.6em 1.6em 0 0;z-index:2147483647;transform:translateY(100%);transition:transform .32s cubic-bezier(.2,.8,.2,1);box-shadow:0 -8px 32px rgba(76,29,149,.45)}' +
+      '#__g_back{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(6,0,18,.72);z-index:2147483646;opacity:0;transition:opacity .25s}' +
+      '#__g_sheet{position:fixed;left:0;right:0;bottom:0;max-height:88%;display:flex;flex-direction:column;overflow:hidden;background:linear-gradient(180deg,#1d0b3f 0%,#12062b 100%);color:#f3e8ff;font-family:Roboto,sans-serif;font-size:3.1vw;line-height:1.3;border-radius:1.8em 1.8em 0 0;border-top:1px solid rgba(167,139,250,.35);z-index:2147483647;transform:translateY(100%);transition:transform .32s cubic-bezier(.2,.8,.2,1);box-shadow:0 -10px 40px rgba(124,58,237,.35)}' +
       '#__g_sheet *{box-sizing:border-box}' +
-      '.__g_hero{flex:none;background:linear-gradient(135deg,#a78bfa 0%,#7c3aed 55%,#5b21b6 100%);color:#fff;padding:.7em 1.3em 1.2em}' +
-      '.__g_handle{width:3em;height:.3em;background:rgba(255,255,255,.5);border-radius:1em;margin:0 auto .9em}' +
-      '.__g_head{display:flex;align-items:center;justify-content:space-between}' +
-      '.__g_title{font-size:1.6em;font-weight:700}' +
-      '.__g_sub{font-size:.85em;opacity:.8;margin-top:.1em}' +
-      '.__g_x{width:2.4em;height:2.4em;border-radius:50%;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-size:.9em}' +
-      '.__g_stats{display:flex;gap:.6em;margin-top:1em}' +
-      '.__g_stat{flex:1;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.22);border-radius:1em;padding:.7em .4em;text-align:center}' +
-      '.__g_sv{font-size:1.5em;font-weight:700}' +
-      '.__g_sl{font-size:.7em;opacity:.8;margin-top:.1em;letter-spacing:.06em;text-transform:uppercase}' +
-      '.__g_tabs{flex:none;padding:.9em 1.3em .3em}' +
-      '.__g_seg{display:flex;background:#ede9fe;border-radius:2em;padding:.25em}' +
-      '.__g_tab{flex:1;text-align:center;padding:.5em 0;border-radius:2em;color:#6d28d9;font-weight:500}' +
-      '.__g_tab.on{background:linear-gradient(135deg,#8b5cf6,#6d28d9);color:#fff;box-shadow:0 2px 8px rgba(109,40,217,.35)}' +
-      '.__g_list{flex:1;min-height:0;overflow-y:auto;padding:.2em 1.3em 1.6em}' +
-      '.__g_term{display:flex;align-items:center;gap:.6em;font-size:.75em;font-weight:700;color:#7c3aed;text-transform:uppercase;letter-spacing:.08em;margin:1.2em 0 .5em}' +
-      '.__g_term i{flex:1;height:1px;background:#ddd6fe}' +
-      '.__g_row{display:flex;align-items:center;gap:.8em;background:#fff;border:1px solid #efeaff;border-radius:1em;padding:.65em .8em;margin-bottom:.4em;box-shadow:0 1px 3px rgba(91,33,182,.06)}' +
+      '.__g_hero{flex:none;padding:.7em 1.4em 1em}' +
+      '.__g_handle{width:3em;height:.3em;background:rgba(196,181,253,.35);border-radius:1em;margin:0 auto .9em}' +
+      '.__g_top{display:flex;align-items:center;justify-content:space-between}' +
+      '.__g_ttl{font-size:1.5em;font-weight:700}' +
+      '.__g_ttl span{display:block;font-size:.5em;font-weight:400;color:#a78bfa;margin-top:.2em;letter-spacing:.1em;text-transform:uppercase}' +
+      '.__g_x{width:2.3em;height:2.3em;border-radius:50%;background:rgba(124,58,237,.25);border:1px solid rgba(167,139,250,.3);display:flex;align-items:center;justify-content:center;font-size:.85em;color:#ddd6fe}' +
+      '.__g_score{display:flex;align-items:center;justify-content:space-between;margin-top:1.1em}' +
+      '.__g_big{font-size:3.4em;font-weight:800;line-height:1;background:linear-gradient(135deg,#c4b5fd,#8b5cf6 55%,#c026d3);-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-fill-color:transparent}' +
+      '.__g_lbl{font-size:.7em;letter-spacing:.14em;color:#8b7bb5;margin-top:.5em;text-transform:uppercase}' +
+      '.__g_chips{display:flex;flex-direction:column;gap:.5em}' +
+      '.__g_chip{display:flex;align-items:center;justify-content:space-between;gap:1.2em;min-width:10em;background:rgba(124,58,237,.18);border:1px solid rgba(167,139,250,.2);border-radius:.9em;padding:.5em 1em}' +
+      '.__g_chip b{font-size:1.2em;color:#f3e8ff}' +
+      '.__g_chip em{font-style:normal;font-size:.72em;color:#a78bfa;letter-spacing:.1em;text-transform:uppercase}' +
+      '.__g_prog{height:.4em;background:rgba(124,58,237,.25);border-radius:1em;margin-top:1.2em;overflow:hidden}' +
+      '.__g_prog b{display:block;height:100%;background:linear-gradient(90deg,#7c3aed,#c026d3);border-radius:1em}' +
+      '.__g_progt{font-size:.72em;color:#8b7bb5;margin-top:.5em}' +
+      '.__g_tabs{flex:none;display:flex;gap:1.8em;padding:.2em 1.4em 0;border-bottom:1px solid rgba(167,139,250,.15)}' +
+      '.__g_tab{padding:.7em 0;color:#8b7bb5;font-weight:500;border-bottom:2px solid transparent;margin-bottom:-1px}' +
+      '.__g_tab.on{color:#f3e8ff;border-bottom-color:#8b5cf6}' +
+      '.__g_list{flex:1;min-height:0;overflow-y:auto;padding:.2em 1.4em 1.8em}' +
+      '.__g_term{display:flex;align-items:center;gap:.7em;font-size:.72em;font-weight:700;color:#a78bfa;text-transform:uppercase;letter-spacing:.12em;margin:1.4em 0 .6em}' +
+      '.__g_term i{flex:1;height:1px;background:rgba(167,139,250,.18)}' +
+      '.__g_row{display:flex;align-items:center;gap:.9em;background:rgba(124,58,237,.12);border:1px solid rgba(167,139,250,.14);border-radius:1em;padding:.7em .9em .7em .7em;margin-bottom:.45em}' +
+      '.__g_acc{align-self:stretch;width:.25em;border-radius:1em;background:linear-gradient(180deg,#8b5cf6,#c026d3)}' +
       '.__g_info{flex:1;min-width:0}' +
-      '.__g_name{font-size:1em;font-weight:500;color:#1e1b4b}' +
-      '.__g_meta{font-size:.78em;color:#8b83b3;margin-top:.15em}' +
-      '.__g_pill{min-width:3.4em;text-align:center;padding:.4em .7em;border-radius:.8em;font-weight:700;color:#fff}' +
-      '.__g_a{background:linear-gradient(135deg,#8b5cf6,#6d28d9)}' +
-      '.__g_d{background:linear-gradient(135deg,#f87171,#dc2626)}' +
-      '.__g_na{background:#f1f0f7;color:#a5a0c4}' +
-      '.__g_empty{text-align:center;color:#8b83b3;padding:2em}';
+      '.__g_name{font-size:1em;font-weight:500;color:#f5f3ff}' +
+      '.__g_meta{font-size:.76em;color:#8b7bb5;margin-top:.2em}' +
+      '.__g_g{font-size:1.5em;font-weight:800;min-width:2.4em;text-align:right;color:#ddd6fe}' +
+      '.__g_d{color:#fb7185}' +
+      '.__g_na{color:#4c3a78;font-weight:600}' +
+      '.__g_dim .__g_name{color:#9d8cc9}' +
+      '.__g_dim .__g_acc{background:#2e1c52}' +
+      '.__g_empty{text-align:center;color:#8b7bb5;padding:2em}';
     document.head.appendChild(st);
   }
 
@@ -157,18 +166,20 @@ private val HOOK_JS = """
     back.id = '__g_back';
     var sheet = document.createElement('div');
     sheet.id = '__g_sheet';
+    var pct = model.total ? Math.round(model.graded * 100 / model.total) : 0;
     sheet.innerHTML =
       '<div class="__g_hero">' +
         '<div class="__g_handle"></div>' +
-        '<div class="__g_head"><div><div class="__g_title">My Grades</div><div class="__g_sub">Curriculum Evaluation</div></div>' +
+        '<div class="__g_top"><div class="__g_ttl">My Grades<span>Curriculum Evaluation</span></div>' +
         '<div class="__g_x" id="__g_close">&#10005;</div></div>' +
-        '<div class="__g_stats">' +
-          stat('GWA', model.gwa === null ? '-' : model.gwa.toFixed(2)) +
-          stat('Units', model.units.toFixed(1)) +
-          stat('Graded', model.graded + '/' + model.total) +
+        '<div class="__g_score">' +
+          '<div><div class="__g_big">' + (model.gwa === null ? '-' : model.gwa.toFixed(2)) + '</div><div class="__g_lbl">GWA</div></div>' +
+          '<div class="__g_chips">' + chip('Units', model.units.toFixed(1)) + chip('Graded', model.graded + '/' + model.total) + '</div>' +
         '</div>' +
+        '<div class="__g_prog"><b style="width:' + pct + '%"></b></div>' +
+        '<div class="__g_progt">' + pct + '% of your curriculum is graded</div>' +
       '</div>' +
-      '<div class="__g_tabs"><div class="__g_seg"><div class="__g_tab on" id="__g_t1">Graded</div><div class="__g_tab" id="__g_t2">All subjects</div></div></div>' +
+      '<div class="__g_tabs"><div class="__g_tab on" id="__g_t1">Graded</div><div class="__g_tab" id="__g_t2">All subjects</div></div>' +
       '<div class="__g_list" id="__g_list"></div>';
     document.body.appendChild(back);
     document.body.appendChild(sheet);
@@ -287,9 +298,10 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        window.statusBarColor = PURPLE_DARK
+        window.statusBarColor = PURPLE_DEEP
 
         root = FrameLayout(this)
+        root.setBackgroundColor(PURPLE_DEEP)
         web = WebView(this)
         root.addView(web, FrameLayout.LayoutParams(MATCH, MATCH))
         buildFab()
@@ -336,6 +348,7 @@ class MainActivity : Activity() {
             setPadding(dp(14), dp(14), dp(14), dp(14))
             background = purpleGradient(GradientDrawable.Orientation.TL_BR).apply {
                 shape = GradientDrawable.OVAL
+                setStroke(dp(1), 0x66C4B5FD)
             }
             elevation = dp(10).toFloat()
             visibility = View.GONE
@@ -412,6 +425,7 @@ class MainActivity : Activity() {
             setPadding(dp(14), dp(12), dp(16), dp(12))
             background = purpleGradient(GradientDrawable.Orientation.LEFT_RIGHT).apply {
                 cornerRadius = dp(20).toFloat()
+                setStroke(dp(1), 0x40C4B5FD)
             }
             elevation = dp(12).toFloat()
             visibility = View.INVISIBLE
