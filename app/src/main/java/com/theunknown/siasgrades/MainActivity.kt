@@ -112,6 +112,8 @@ private val HOOK_JS = """
       '.__g_prog{height:.4em;background:rgba(124,58,237,.25);border-radius:1em;margin-top:1.2em;overflow:hidden}' +
       '.__g_prog b{display:block;height:100%;background:linear-gradient(90deg,#7c3aed,#c026d3);border-radius:1em}' +
       '.__g_progt{font-size:.72em;color:#8b7bb5;margin-top:.5em}' +
+      '.__g_note{display:flex;gap:.7em;align-items:flex-start;margin-top:.9em;padding:.7em .8em;background:rgba(124,58,237,.14);border:1px solid rgba(167,139,250,.2);border-radius:.9em;font-size:.72em;line-height:1.35;color:#b9a8e6}' +
+      '.__g_note span{flex:none;width:1.6em;height:1.6em;border-radius:50%;background:rgba(167,139,250,.3);color:#ede9fe;font-weight:700;font-style:italic;text-align:center;line-height:1.6em;font-size:.95em}' +
       '.__g_tabs{flex:none;display:flex;gap:1.8em;padding:.2em 1.4em 0;border-bottom:1px solid rgba(167,139,250,.15)}' +
       '.__g_tab{padding:.7em 0;color:#8b7bb5;font-weight:500;border-bottom:2px solid transparent;margin-bottom:-1px}' +
       '.__g_tab.on{color:#f3e8ff;border-bottom-color:#8b5cf6}' +
@@ -173,11 +175,12 @@ private val HOOK_JS = """
         '<div class="__g_top"><div class="__g_ttl">My Grades<span>Curriculum Evaluation</span></div>' +
         '<div class="__g_x" id="__g_close">&#10005;</div></div>' +
         '<div class="__g_score">' +
-          '<div><div class="__g_big">' + (model.gwa === null ? '-' : model.gwa.toFixed(2)) + '</div><div class="__g_lbl">GWA</div></div>' +
+          '<div><div class="__g_big">' + (model.gwa === null ? '-' : model.gwa.toFixed(2)) + '</div><div class="__g_lbl">GWA (approx.)</div></div>' +
           '<div class="__g_chips">' + chip('Units', model.units.toFixed(1)) + chip('Graded', model.graded + '/' + model.total) + '</div>' +
         '</div>' +
         '<div class="__g_prog"><b style="width:' + pct + '%"></b></div>' +
         '<div class="__g_progt">' + pct + '% of your curriculum is graded</div>' +
+        '<div class="__g_note"><span>i</span><div>This GWA is computed from grades rounded to 2 decimals, the same rounded values the site sends. The official GWA on the page uses the exact unrounded grades, so it can differ slightly. Use the page for the official number.</div></div>' +
       '</div>' +
       '<div class="__g_tabs"><div class="__g_tab on" id="__g_t1">Graded</div><div class="__g_tab" id="__g_t2">All subjects</div></div>' +
       '<div class="__g_list" id="__g_list"></div>';
