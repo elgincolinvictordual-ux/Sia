@@ -7,7 +7,8 @@ Android app that opens the PRMSU SIAS page and shows your grades in a clean shee
 - Grades = `Previous[].Grade` / 100, units = `Units` / 100 (the top-level `Grade` is scrambled and ignored)
 - GWA is weighted by units across graded subjects
 - A slide-in banner tells you to open **Reports > Curriculum Evaluation** after login
-- A floating **Grades** button appears once the data is loaded; tap it any time to reopen the sheet
+- A floating atom button appears once the data is loaded; tap it to open the grades sheet (it hides while the sheet is open)
+- On logout (tapping Logout, a logout request, or the login page showing again) the grades and button are cleared, so the next user starts clean
 - Back button: closes the sheet, then goes back in the site, then press twice to exit
 
 ## Get the APK
