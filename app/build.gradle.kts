@@ -11,8 +11,8 @@ android {
         applicationId = "com.theunknown.siasgrades"
         minSdk = 26
         targetSdk = 34
-        versionCode = 2
-        versionName = "1.1"
+        versionCode = 4
+        versionName = "1.3"
     }
 
     // Fixed key so every build is signed the same way and updates install over each other
