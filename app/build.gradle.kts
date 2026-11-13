@@ -11,11 +11,10 @@ android {
         applicationId = "com.theunknown.siasgrades"
         minSdk = 26
         targetSdk = 34
-        versionCode = 6
-        versionName = "1.5"
+        versionCode = 9
+        versionName = "1.8"
     }
 
-    // Fixed key so every build is signed the same way and updates install over each other
     signingConfigs {
         create("main") {
             storeFile = file("sias.keystore")
@@ -28,7 +27,12 @@ android {
     buildTypes {
         release {
             signingConfig = signingConfigs.getByName("main")
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
         }
     }
 
