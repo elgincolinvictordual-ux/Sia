@@ -355,6 +355,7 @@ private val BG_HOOK_JS = """
 class MainActivity : Activity() {
     private lateinit var root: FrameLayout
     private lateinit var web: WebView
+    private lateinit var bgWeb: WebView
     private lateinit var fab: ImageView
     private lateinit var banner: LinearLayout
     private lateinit var bannerIcon: TextView
@@ -363,6 +364,7 @@ class MainActivity : Activity() {
 
     private var lastJson: String? = null
     private var sheetOpen = false
+    private var bgFetchInFlight = false
     private var lastBackPress = 0L
     private val handler = Handler(Looper.getMainLooper())
     private val hideBannerTask = Runnable { dismissBanner() }
