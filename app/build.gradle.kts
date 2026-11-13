@@ -11,8 +11,8 @@ android {
         applicationId = "com.theunknown.siasgrades"
         minSdk = 26
         targetSdk = 34
-        versionCode = 17
-        versionName = "1.15"
+        versionCode = 20
+        versionName = "1.18"
     }
 
     signingConfigs {
