@@ -23,6 +23,7 @@ import android.widget.TextView
 import org.json.JSONObject
 
 private const val SIAS_URL = "https://icloudph.com/prmsu-main/sias/"
+private const val DEBUG_BG = true
 private const val MATCH = ViewGroup.LayoutParams.MATCH_PARENT
 private const val WRAP = ViewGroup.LayoutParams.WRAP_CONTENT
 
@@ -339,14 +340,14 @@ private val BG_HOOK_JS = """
   }
 
   setTimeout(function () {
-    waitFor('Reports', 8000, function (reportsEl) {
+    waitFor('Reports', 20000, function (reportsEl) {
       if (!reportsEl) {
         try { AppLink.onBgFallback(); } catch (e) {}
         return;
       }
       simulateClick(reportsEl);
       setTimeout(function () {
-        waitFor('Curriculum Evaluation', 6000, function (ceEl) {
+        waitFor('Curriculum Evaluation', 15000, function (ceEl) {
           if (!ceEl) {
             try { AppLink.onBgFallback(); } catch (e) {}
             return;
@@ -393,8 +394,15 @@ class MainActivity : Activity() {
         root.addView(web, FrameLayout.LayoutParams(MATCH, MATCH))
 
         bgWeb = WebView(this)
-        bgWeb.visibility = View.INVISIBLE
-        root.addView(bgWeb, FrameLayout.LayoutParams(MATCH, MATCH))
+        if (DEBUG_BG) {
+            val lp = FrameLayout.LayoutParams(dp(260), dp(460), Gravity.TOP or Gravity.START)
+            lp.setMargins(dp(8), dp(90), 0, 0)
+            bgWeb.setBackgroundColor(Color.YELLOW)
+            root.addView(bgWeb, lp)
+        } else {
+            bgWeb.visibility = View.INVISIBLE
+            root.addView(bgWeb, FrameLayout.LayoutParams(MATCH, MATCH))
+        }
 
         buildFab()
         buildBanner()
