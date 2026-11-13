@@ -198,11 +198,90 @@ private val HOOK_JS = """
   };
 
   var TARGET = String.fromCharCode(99,117,114,114,101,118,97,108);
+  var autoFlowActive = false;
+
+  function findLeafByText(text) {
+    var all = document.querySelectorAll('div,span');
+    for (var i = 0; i < all.length; i++) {
+      var el = all[i];
+      if (el.children.length === 0 && el.textContent.trim() === text) return el;
+    }
+    return null;
+  }
+
+  function simulateClick(el) {
+    var r = el.getBoundingClientRect();
+    var x = r.left + r.width / 2, y = r.top + r.height / 2;
+    ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'].forEach(function (type) {
+      var isPointer = type.indexOf('pointer') === 0;
+      var opts = { bubbles: true, cancelable: true, clientX: x, clientY: y };
+      var ev;
+      try {
+        ev = isPointer ? new PointerEvent(type, Object.assign({ pointerId: 1, isPrimary: true }, opts))
+                        : new MouseEvent(type, opts);
+      } catch (e) {
+        ev = new MouseEvent(type, opts);
+      }
+      el.dispatchEvent(ev);
+    });
+  }
+
+  function waitFor(text, timeoutMs, cb) {
+    var start = Date.now();
+    (function poll() {
+      var el = findLeafByText(text);
+      if (el) return cb(el);
+      if (Date.now() - start > timeoutMs) return cb(null);
+      setTimeout(poll, 100);
+    })();
+  }
+
+  // The tab's close button is rendered as a div whose background-image
+  // points to the framework's close.gif icon. That is a far more reliable
+  // signature than guessing by size, since other small elements (scrollbar
+  // parts, etc.) can otherwise be mistaken for it.
+  function findCloseIcon(nearEl) {
+    var all = document.querySelectorAll('div');
+    var candidates = [];
+    for (var i = 0; i < all.length; i++) {
+      var bg = (all[i].style && all[i].style.backgroundImage) || '';
+      if (bg.toLowerCase().indexOf('close') !== -1) candidates.push(all[i]);
+    }
+    if (!candidates.length) return null;
+    if (!nearEl) return candidates[0];
+    var ref = nearEl.getBoundingClientRect();
+    var best = null, bestDist = Infinity;
+    for (var j = 0; j < candidates.length; j++) {
+      var r = candidates[j].getBoundingClientRect();
+      var dist = Math.abs(r.top - ref.top) + Math.abs(r.left - ref.left);
+      if (dist < bestDist) { bestDist = dist; best = candidates[j]; }
+    }
+    return best;
+  }
+
+  function closeTab(text) {
+    var label = findLeafByText(text);
+    var icon = findCloseIcon(label);
+    if (!icon) return false;
+    simulateClick(icon);
+    return true;
+  }
 
   function capture(text) {
     try {
       var d = JSON.parse(text);
-      if (d && Array.isArray(d.Data)) AppLink.onGrades(text);
+      if (d && Array.isArray(d.Data)) {
+        AppLink.onGrades(text);
+        if (autoFlowActive) {
+          autoFlowActive = false;
+          setTimeout(function () {
+            closeTab('Curriculum Evaluation');
+            setTimeout(function () {
+              try { AppLink.onAutoFlowDone(); } catch (e) {}
+            }, 300);
+          }, 400);
+        }
+      }
     } catch (e) {}
   }
 
@@ -241,45 +320,11 @@ private val HOOK_JS = """
     }
   }, true);
 
-  function findLeafByText(text) {
-    var all = document.querySelectorAll('div,span');
-    for (var i = 0; i < all.length; i++) {
-      var el = all[i];
-      if (el.children.length === 0 && el.textContent.trim() === text) return el;
-    }
-    return null;
-  }
-
-  function simulateClick(el) {
-    var r = el.getBoundingClientRect();
-    var x = r.left + r.width / 2, y = r.top + r.height / 2;
-    ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'].forEach(function (type) {
-      var isPointer = type.indexOf('pointer') === 0;
-      var opts = { bubbles: true, cancelable: true, clientX: x, clientY: y };
-      var ev;
-      try {
-        ev = isPointer ? new PointerEvent(type, Object.assign({ pointerId: 1, isPrimary: true }, opts))
-                        : new MouseEvent(type, opts);
-      } catch (e) {
-        ev = new MouseEvent(type, opts);
-      }
-      el.dispatchEvent(ev);
-    });
-  }
-
-  function waitFor(text, timeoutMs, cb) {
-    var start = Date.now();
-    (function poll() {
-      var el = findLeafByText(text);
-      if (el) return cb(el);
-      if (Date.now() - start > timeoutMs) return cb(null);
-      setTimeout(poll, 150);
-    })();
-  }
-
   function autoOpenReport() {
+    autoFlowActive = true;
     waitFor('Reports', 10000, function (reportsEl) {
       if (!reportsEl) {
+        autoFlowActive = false;
         try { AppLink.onAutoClickFallback(); } catch (e) {}
         return;
       }
@@ -287,12 +332,13 @@ private val HOOK_JS = """
       setTimeout(function () {
         waitFor('Curriculum Evaluation', 8000, function (ceEl) {
           if (!ceEl) {
+            autoFlowActive = false;
             try { AppLink.onAutoClickFallback(); } catch (e) {}
             return;
           }
           simulateClick(ceEl);
         });
-      }, 500);
+      }, 250);
     });
   }
 
@@ -319,7 +365,7 @@ private val HOOK_JS = """
         seenLogin = false;
         misses = 0;
         try { AppLink.onLoggedIn(); } catch (e) {}
-        setTimeout(autoOpenReport, 1200);
+        setTimeout(autoOpenReport, 600);
       }
     }
   }, 800);
@@ -429,6 +475,7 @@ class MainActivity : Activity() {
         lastJson = null
         sheetOpen = false
         hideFab()
+        web.alpha = 1f
         web.evaluateJavascript("window.__hideGrades && window.__hideGrades()", null)
         if (hadData) showBanner("Logged out", "Your grades were cleared from the app")
     }
@@ -525,7 +572,14 @@ class MainActivity : Activity() {
         fun onLoggedIn() {
             runOnUiThread {
                 showBanner("You're logged in", "Fetching your grades\u2026")
+                web.alpha = 0f
+                handler.postDelayed({ web.alpha = 1f }, 15000)
             }
+        }
+
+        @JavascriptInterface
+        fun onAutoFlowDone() {
+            runOnUiThread { web.alpha = 1f }
         }
 
         @JavascriptInterface
@@ -549,6 +603,7 @@ class MainActivity : Activity() {
         @JavascriptInterface
         fun onAutoClickFallback() {
             runOnUiThread {
+                web.alpha = 1f
                 if (lastJson == null) {
                     showBanner(
                         "Couldn't load automatically",
