@@ -1,11 +1,16 @@
 package com.theunknown.siasgrades
 
+import android.animation.ObjectAnimator
 import android.annotation.SuppressLint
 import android.app.Activity
+import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Paint
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
+import android.view.animation.LinearInterpolator
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -236,6 +241,34 @@ private val HOOK_JS = """
     })();
   }
 
+  var PW = 'input[type=password],input[name*=pass i],input[id*=pass i],input[placeholder*=pass i]';
+  function findPw() {
+    var list = document.querySelectorAll(PW);
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].isConnected && list[i].getClientRects().length > 0) return list[i];
+    }
+    return null;
+  }
+
+  // Fires the moment a login attempt is made, before the page has actually
+  // finished logging in, so the loading cover appears with no visible delay.
+  function fireLoginAttempt() {
+    try { AppLink.onLoginAttempt(); } catch (e) {}
+  }
+  document.addEventListener('click', function (e) {
+    var el = e.target;
+    for (var i = 0; el && i < 4; i++, el = el.parentElement) {
+      var t = (el.textContent || '').trim().toLowerCase().replace(/\s/g, '');
+      if (t === 'login' || t === 'signin' || t === 'logon') {
+        fireLoginAttempt();
+        return;
+      }
+    }
+  }, true);
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' && document.activeElement === findPw()) fireLoginAttempt();
+  }, true);
+
   // The tab's close button is rendered as a div whose background-image
   // points to the framework's close.gif icon. That is a far more reliable
   // signature than guessing by size, since other small elements (scrollbar
@@ -342,15 +375,7 @@ private val HOOK_JS = """
     });
   }
 
-  var PW = 'input[type=password],input[name*=pass i],input[id*=pass i],input[placeholder*=pass i]';
   var seenLogin = false, misses = 0;
-  function findPw() {
-    var list = document.querySelectorAll(PW);
-    for (var i = 0; i < list.length; i++) {
-      if (list[i].isConnected && list[i].getClientRects().length > 0) return list[i];
-    }
-    return null;
-  }
   setInterval(function () {
     if (!document.body) return;
     if (findPw()) {
@@ -372,9 +397,40 @@ private val HOOK_JS = """
 })();
 """.trimIndent()
 
+// A 12-tick spinner in the style of iOS's activity indicator, drawn by hand
+// since no image asset is used anywhere else in this app. The whole shape
+// spins continuously via a rotation animation.
+private class IosSpinner(context: Context) : View(context) {
+    private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = PURPLE_MID
+        style = Paint.Style.FILL
+    }
+
+    override fun onDraw(canvas: Canvas) {
+        val cx = width / 2f
+        val cy = height / 2f
+        val outerR = width / 2f * 0.92f
+        val innerR = outerR * 0.5f
+        val tickWidth = width * 0.09f
+        val ticks = 12
+        for (i in 0 until ticks) {
+            paint.alpha = (255 * (i + 1) / ticks.toFloat()).toInt()
+            canvas.save()
+            canvas.rotate(i * (360f / ticks), cx, cy)
+            canvas.drawRoundRect(
+                cx - tickWidth / 2, cy - outerR, cx + tickWidth / 2, cy - innerR,
+                tickWidth / 2, tickWidth / 2, paint
+            )
+            canvas.restore()
+        }
+    }
+}
+
 class MainActivity : Activity() {
     private lateinit var root: FrameLayout
     private lateinit var web: WebView
+    private lateinit var loadingOverlay: FrameLayout
+    private lateinit var spinner: IosSpinner
     private lateinit var fab: ImageView
     private lateinit var banner: LinearLayout
     private lateinit var bannerIcon: TextView
@@ -403,6 +459,7 @@ class MainActivity : Activity() {
         web = WebView(this)
         root.addView(web, FrameLayout.LayoutParams(MATCH, MATCH))
 
+        buildLoadingOverlay()
         buildFab()
         buildBanner()
         setContentView(root)
@@ -435,6 +492,31 @@ class MainActivity : Activity() {
         }
 
         web.loadUrl(SIAS_URL)
+    }
+
+    private fun buildLoadingOverlay() {
+        loadingOverlay = FrameLayout(this).apply {
+            setBackgroundColor(Color.WHITE)
+            visibility = View.GONE
+        }
+        spinner = IosSpinner(this)
+        val size = dp(44)
+        loadingOverlay.addView(spinner, FrameLayout.LayoutParams(size, size, Gravity.CENTER))
+        ObjectAnimator.ofFloat(spinner, "rotation", 0f, 360f).apply {
+            duration = 900
+            repeatCount = ObjectAnimator.INFINITE
+            interpolator = LinearInterpolator()
+            start()
+        }
+        root.addView(loadingOverlay, FrameLayout.LayoutParams(MATCH, MATCH))
+    }
+
+    private fun showLoadingOverlay() {
+        loadingOverlay.visibility = View.VISIBLE
+    }
+
+    private fun hideLoadingOverlay() {
+        loadingOverlay.visibility = View.GONE
     }
 
     private fun buildFab() {
@@ -476,6 +558,7 @@ class MainActivity : Activity() {
         sheetOpen = false
         hideFab()
         web.alpha = 1f
+        hideLoadingOverlay()
         web.evaluateJavascript("window.__hideGrades && window.__hideGrades()", null)
         if (hadData) showBanner("Logged out", "Your grades were cleared from the app")
     }
@@ -569,17 +652,33 @@ class MainActivity : Activity() {
         }
 
         @JavascriptInterface
+        fun onLoginAttempt() {
+            runOnUiThread {
+                showLoadingOverlay()
+                web.alpha = 0f
+                showBanner("Logging in\u2026", "Please wait")
+                handler.postDelayed({
+                    hideLoadingOverlay()
+                    web.alpha = 1f
+                }, 15000)
+            }
+        }
+
+        @JavascriptInterface
         fun onLoggedIn() {
             runOnUiThread {
-                showBanner("You're logged in", "Fetching your grades\u2026")
+                showLoadingOverlay()
                 web.alpha = 0f
-                handler.postDelayed({ web.alpha = 1f }, 15000)
+                showBanner("You're logged in", "Fetching your grades\u2026")
             }
         }
 
         @JavascriptInterface
         fun onAutoFlowDone() {
-            runOnUiThread { web.alpha = 1f }
+            runOnUiThread {
+                hideLoadingOverlay()
+                web.alpha = 1f
+            }
         }
 
         @JavascriptInterface
@@ -603,6 +702,7 @@ class MainActivity : Activity() {
         @JavascriptInterface
         fun onAutoClickFallback() {
             runOnUiThread {
+                hideLoadingOverlay()
                 web.alpha = 1f
                 if (lastJson == null) {
                     showBanner(
