@@ -92,9 +92,9 @@ private val HOOK_JS = """
     var st = document.createElement('style');
     st.id = '__g_style';
     st.textContent =
-      '#__g_back{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(6,0,18,.72);z-index:2147483646;opacity:0;transition:opacity .25s}' +
-      '#__g_sheet{position:fixed;left:0;right:0;bottom:0;height:70%;display:flex;flex-direction:column;overflow:hidden;background:linear-gradient(180deg,#1d0b3f 0%,#12062b 100%);color:#f3e8ff;font-family:Roboto,sans-serif;font-size:3.1vw;line-height:1.3;border-radius:1.8em 1.8em 0 0;border-top:1px solid rgba(167,139,250,.35);z-index:2147483647;transform-origin:100% 100%;transform:scale(.06);opacity:0;transition:transform .4s cubic-bezier(.2,.9,.25,1),opacity .22s ease,height .28s cubic-bezier(.2,.8,.2,1);box-shadow:0 -10px 40px rgba(124,58,237,.35)}' +
-      '#__g_sheet.__g_drag{transition:transform .4s cubic-bezier(.2,.9,.25,1),opacity .22s ease}' +
+      '#__g_back{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(6,0,18,.72);z-index:2147483646;opacity:0;will-change:opacity;transition:opacity .2s}' +
+      '#__g_sheet{position:fixed;left:0;right:0;bottom:0;height:92%;display:flex;flex-direction:column;overflow:hidden;background:linear-gradient(180deg,#1d0b3f 0%,#12062b 100%);color:#f3e8ff;font-family:Roboto,sans-serif;font-size:3.1vw;line-height:1.3;border-radius:1.8em 1.8em 0 0;border-top:1px solid rgba(167,139,250,.35);z-index:2147483647;transform-origin:100% 100%;opacity:0;will-change:transform,opacity;transition:transform .34s cubic-bezier(.2,.9,.25,1),opacity .2s ease;box-shadow:0 -6px 22px rgba(124,58,237,.3)}' +
+      '#__g_sheet.__g_drag{transition:none}' +
       '#__g_sheet *{box-sizing:border-box}' +
       '.__g_hero{flex:none;padding:.7em 1.4em 1em}' +
       '.__g_grab{padding:.4em 0 .5em;touch-action:none}' +
@@ -117,7 +117,7 @@ private val HOOK_JS = """
       '.__g_tabs{flex:none;display:flex;gap:1.8em;padding:.2em 1.4em 0;border-bottom:1px solid rgba(167,139,250,.15)}' +
       '.__g_tab{padding:.7em 0;color:#8b7bb5;font-weight:500;border-bottom:2px solid transparent;margin-bottom:-1px}' +
       '.__g_tab.on{color:#f3e8ff;border-bottom-color:#8b5cf6}' +
-      '.__g_list{flex:1;min-height:0;overflow-y:auto;padding:.2em 1.4em 1.8em}' +
+      '.__g_list{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:.2em 1.4em 1.8em}' +
       '.__g_term{display:flex;align-items:center;gap:.7em;font-size:.72em;font-weight:700;color:#a78bfa;text-transform:uppercase;letter-spacing:.12em;margin:1.4em 0 .6em}' +
       '.__g_term i{flex:1;height:1px;background:rgba(167,139,250,.18)}' +
       '.__g_row{display:flex;align-items:center;gap:.9em;background:rgba(124,58,237,.12);border:1px solid rgba(167,139,250,.14);border-radius:1em;padding:.7em .9em .7em .7em;margin-bottom:.45em}' +
@@ -141,15 +141,18 @@ private val HOOK_JS = """
     });
   }
 
+  var sheetOff = 0;
+
   function closeSheet() {
     var back = document.getElementById('__g_back');
     var sheet = document.getElementById('__g_sheet');
     if (!sheet) return;
     try { AppLink.onSheetState(false); } catch (e) {}
-    sheet.style.transform = 'scale(.06)';
+    sheet.classList.remove('__g_drag');
+    sheet.style.transform = 'translate3d(0,' + sheetOff + 'px,0) scale(.06)';
     sheet.style.opacity = '0';
     if (back) back.style.opacity = '0';
-    setTimeout(removeNow, 400);
+    setTimeout(removeNow, 360);
   }
 
   window.__hideGrades = function () {
@@ -199,13 +202,27 @@ private val HOOK_JS = """
 
     var winH = function () { return window.innerHeight; };
     var MAXH = 0.92, MINH = 0.42;
-    sheet.style.height = Math.round(winH() * 0.7) + 'px';
+    // The sheet is always laid out at full height and only moved with a
+    // transform while dragging, so no layout work happens per frame.
+    var sheetH = Math.round(winH() * MAXH);
+    sheet.style.height = sheetH + 'px';
+    function offFor(f) { return Math.max(0, sheetH - Math.round(winH() * f)); }
+    function setOff(o, sc) {
+      sheetOff = o;
+      sheet.style.transform = 'translate3d(0,' + o + 'px,0) scale(' + (sc == null ? 1 : sc) + ')';
+    }
+    function pad(o) { list.style.paddingBottom = 'calc(1.8em + ' + o + 'px)'; }
+    function snap(f) { var o = offFor(f); setOff(o); pad(o); }
 
-    var dragging = false, moved = false, sy = 0, sh = 0, ly = 0, lt = 0, vy = 0;
+    var off0 = offFor(0.7);
+    pad(off0);
+    setOff(off0, 0.06);
+
+    var dragging = false, moved = false, sy = 0, so = 0, ly = 0, lt = 0, vy = 0, raf = 0, pend = 0;
     function dStart(e) {
       if (!e.touches || e.touches.length !== 1) return;
       sy = ly = e.touches[0].clientY;
-      sh = sheet.offsetHeight;
+      so = sheetOff;
       lt = Date.now();
       vy = 0;
       moved = false;
@@ -222,24 +239,26 @@ private val HOOK_JS = """
       var now = Date.now();
       vy = (y - ly) / Math.max(1, now - lt);
       ly = y; lt = now;
-      var h = Math.max(40, Math.min(sh - dy, winH() * MAXH));
-      sheet.style.height = h + 'px';
+      pend = Math.max(0, Math.min(so + dy, sheetH - 40));
+      if (!raf) raf = requestAnimationFrame(function () { raf = 0; setOff(pend); });
     }
     function dEnd() {
       if (!dragging) return;
       dragging = false;
+      if (raf) { cancelAnimationFrame(raf); raf = 0; setOff(pend); }
       sheet.classList.remove('__g_drag');
       if (!moved) return;
-      var h = sheet.offsetHeight, H = winH();
+      var H = winH(), vis = sheetH - sheetOff;
       if (vy > 0.9) {
-        if (h > H * 0.7) sheet.style.height = Math.round(H * 0.55) + 'px';
-        else closeSheet();
+        if (vis > H * 0.7) snap(0.55); else closeSheet();
       } else if (vy < -0.9) {
-        sheet.style.height = Math.round(H * MAXH) + 'px';
-      } else if (h < H * 0.34) {
+        snap(MAXH);
+      } else if (vis < H * 0.34) {
         closeSheet();
-      } else if (h < H * MINH) {
-        sheet.style.height = Math.round(H * MINH) + 'px';
+      } else if (vis < H * MINH) {
+        snap(MINH);
+      } else {
+        pad(sheetOff);
       }
     }
     [sheet.querySelector('.__g_hero'), sheet.querySelector('.__g_tabs')].forEach(function (el) {
@@ -250,11 +269,14 @@ private val HOOK_JS = """
     });
 
     try { AppLink.onSheetState(true); } catch (e) {}
-    setTimeout(function () {
-      back.style.opacity = '1';
-      sheet.style.opacity = '1';
-      sheet.style.transform = 'scale(1)';
-    }, 30);
+    // wait for the first paint of the shrunken state, then animate in
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () {
+        back.style.opacity = '1';
+        sheet.style.opacity = '1';
+        setOff(off0, 1);
+      });
+    });
   };
 
   var TARGET = String.fromCharCode(99,117,114,114,101,118,97,108);
@@ -308,33 +330,45 @@ private val HOOK_JS = """
 
   // Fires the moment a login attempt is made, before the page has actually
   // finished logging in, so the loading cover appears with no visible delay.
-  // Empty password = nothing to log in with, so no cover at all. With a
-  // password typed we cannot know yet if it is right, so the cover goes up
-  // and is dropped again as soon as the server has answered and the login
-  // form is still there (wrong credentials).
-  var attemptActive = false, attemptTimer = null, attemptHard = null;
+  // Pressing Login only shows a "Logging in" banner. The white cover goes up
+  // only once the login form has really disappeared (successful login).
+  // A wrong password leaves the form on screen, so after the server has
+  // answered and the form is still there we report wrong credentials.
+  var attemptActive = false, attemptTimer = null, attemptHard = null, attemptWatch = null;
   function endAttempt() {
     attemptActive = false;
     clearTimeout(attemptTimer);
     clearTimeout(attemptHard);
+    clearInterval(attemptWatch);
   }
-  function checkFail() {
-    if (!attemptActive) return;
-    var failed = !!findPw();
+  function failNow(kind) {
+    if (!attemptActive || !findPw()) return;
     endAttempt();
-    if (failed) { try { AppLink.onLoginFailed(); } catch (e) {} }
+    try { AppLink.onLoginFailed(kind); } catch (e) {}
   }
   function noteNetDone() {
     if (!attemptActive) return;
     clearTimeout(attemptTimer);
-    attemptTimer = setTimeout(checkFail, 1500);
+    attemptTimer = setTimeout(function () { failNow('creds'); }, 2000);
   }
   function fireLoginAttempt() {
     var pw = findPw();
     if (!pw || !pw.value) return;
     endAttempt();
     attemptActive = true;
-    attemptHard = setTimeout(checkFail, 8000);
+    attemptHard = setTimeout(function () { failNow('slow'); }, 12000);
+    var gone = 0;
+    attemptWatch = setInterval(function () {
+      if (!attemptActive) { clearInterval(attemptWatch); return; }
+      gone = findPw() ? 0 : gone + 1;
+      if (gone >= 2) {
+        endAttempt();
+        seenLogin = false;
+        misses = 0;
+        try { AppLink.onLoggedIn(); } catch (e) {}
+        setTimeout(autoOpenReport, 600);
+      }
+    }, 100);
     try { AppLink.onLoginAttempt(); } catch (e) {}
   }
   document.addEventListener('click', function (e) {
@@ -742,21 +776,21 @@ class MainActivity : Activity() {
         @JavascriptInterface
         fun onLoginAttempt() {
             runOnUiThread {
-                showLoadingOverlay()
-                web.alpha = 0f
                 showBanner("Logging in\u2026", "Please wait")
-                handler.removeCallbacks(safetyTask)
-                handler.postDelayed(safetyTask, 15000)
             }
         }
 
         @JavascriptInterface
-        fun onLoginFailed() {
+        fun onLoginFailed(kind: String) {
             runOnUiThread {
                 handler.removeCallbacks(safetyTask)
                 hideLoadingOverlay()
                 web.alpha = 1f
-                dismissBanner()
+                if (kind == "creds") {
+                    showBanner("Wrong credentials", "Check your username and password and try again", "!")
+                } else {
+                    showBanner("Couldn't log in", "Check your connection and try again", "!")
+                }
             }
         }
 
