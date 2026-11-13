@@ -6,7 +6,7 @@ Android app that opens the PRMSU SIAS page and shows your grades in a clean shee
 - Catches the `curreval` response while you browse
 - Grades = `Previous[].Grade` / 100, units = `Units` / 100 (the top-level `Grade` is scrambled and ignored)
 - GWA is weighted by units across graded subjects. It uses the 2-decimal rounded grades the site sends, so it can differ slightly from the official GWA on the page (the sheet says so)
-- A slide-in banner tells you to open **Reports > Curriculum Evaluation** after login
+- After login, a hidden background WebView (sharing the same session) automatically opens Reports > Curriculum Evaluation and captures the grade response, so the visible page never has to navigate there
 - A floating atom button appears once the data is loaded; tap it to open the grades sheet (it hides while the sheet is open)
 - On logout (tapping Logout, a logout request, or the login page showing again) the grades and button are cleared, so the next user starts clean
 - Back button: closes the sheet, then goes back in the site, then press twice to exit
@@ -23,3 +23,10 @@ If you installed an older build signed with a different key, uninstall it once f
 
 ## Change the website
 Edit `SIAS_URL` in `app/src/main/java/com/theunknown/siasgrades/MainActivity.kt`.
+
+## Sharing this with classmates
+Release builds are shrunk and obfuscated (R8), and the network path used to fetch grades
+is not stored as plain text in the source, as a light layer of protection if the APK is
+decompiled. The bigger step is on GitHub: keep this repository **Private** and only hand
+out the built APK (from Actions artifacts or a Release), not repo access. Obfuscating code
+does nothing if the source itself is public.
