@@ -1,6 +1,7 @@
 package com.theunknown.siasgrades
 
 import android.animation.ObjectAnimator
+import android.animation.TimeInterpolator
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Context
@@ -10,7 +11,6 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
-import android.view.animation.LinearInterpolator
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -93,13 +93,14 @@ private val HOOK_JS = """
     st.id = '__g_style';
     st.textContent =
       '#__g_back{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(6,0,18,.72);z-index:2147483646;opacity:0;transition:opacity .25s}' +
-      '#__g_sheet{position:fixed;left:0;right:0;bottom:0;max-height:88%;display:flex;flex-direction:column;overflow:hidden;background:linear-gradient(180deg,#1d0b3f 0%,#12062b 100%);color:#f3e8ff;font-family:Roboto,sans-serif;font-size:3.1vw;line-height:1.3;border-radius:1.8em 1.8em 0 0;border-top:1px solid rgba(167,139,250,.35);z-index:2147483647;transform:translateY(100%);transition:transform .32s cubic-bezier(.2,.8,.2,1);box-shadow:0 -10px 40px rgba(124,58,237,.35)}' +
+      '#__g_sheet{position:fixed;left:0;right:0;bottom:0;height:70%;display:flex;flex-direction:column;overflow:hidden;background:linear-gradient(180deg,#1d0b3f 0%,#12062b 100%);color:#f3e8ff;font-family:Roboto,sans-serif;font-size:3.1vw;line-height:1.3;border-radius:1.8em 1.8em 0 0;border-top:1px solid rgba(167,139,250,.35);z-index:2147483647;transform-origin:100% 100%;transform:scale(.06);opacity:0;transition:transform .4s cubic-bezier(.2,.9,.25,1),opacity .22s ease,height .28s cubic-bezier(.2,.8,.2,1);box-shadow:0 -10px 40px rgba(124,58,237,.35)}' +
+      '#__g_sheet.__g_drag{transition:transform .4s cubic-bezier(.2,.9,.25,1),opacity .22s ease}' +
       '#__g_sheet *{box-sizing:border-box}' +
       '.__g_hero{flex:none;padding:.7em 1.4em 1em}' +
-      '.__g_handle{width:3em;height:.3em;background:rgba(196,181,253,.35);border-radius:1em;margin:0 auto .9em}' +
+      '.__g_grab{padding:.4em 0 .5em;touch-action:none}' +
+      '.__g_handle{width:3em;height:.3em;background:rgba(196,181,253,.45);border-radius:1em;margin:0 auto}' +
       '.__g_top{display:flex;align-items:center;justify-content:space-between}' +
       '.__g_ttl{font-size:1.5em;font-weight:700}' +
-      '.__g_ttl span{display:block;font-size:.5em;font-weight:400;color:#a78bfa;margin-top:.2em;letter-spacing:.1em;text-transform:uppercase}' +
       '.__g_x{width:2.3em;height:2.3em;border-radius:50%;background:rgba(124,58,237,.25);border:1px solid rgba(167,139,250,.3);display:flex;align-items:center;justify-content:center;font-size:.85em;color:#ddd6fe}' +
       '.__g_score{display:flex;align-items:center;justify-content:space-between;margin-top:1.1em}' +
       '.__g_big{font-size:3.4em;font-weight:800;line-height:1;background:linear-gradient(135deg,#c4b5fd,#8b5cf6 55%,#c026d3);-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-fill-color:transparent}' +
@@ -145,9 +146,10 @@ private val HOOK_JS = """
     var sheet = document.getElementById('__g_sheet');
     if (!sheet) return;
     try { AppLink.onSheetState(false); } catch (e) {}
-    sheet.style.transform = 'translateY(100%)';
+    sheet.style.transform = 'scale(.06)';
+    sheet.style.opacity = '0';
     if (back) back.style.opacity = '0';
-    setTimeout(removeNow, 320);
+    setTimeout(removeNow, 400);
   }
 
   window.__hideGrades = function () {
@@ -170,8 +172,8 @@ private val HOOK_JS = """
     var pct = model.total ? Math.round(model.graded * 100 / model.total) : 0;
     sheet.innerHTML =
       '<div class="__g_hero">' +
-        '<div class="__g_handle"></div>' +
-        '<div class="__g_top"><div class="__g_ttl">My Grades<span>Curriculum Evaluation</span></div>' +
+        '<div class="__g_grab"><div class="__g_handle"></div></div>' +
+        '<div class="__g_top"><div class="__g_ttl">My Grades</div>' +
         '<div class="__g_x" id="__g_close">&#10005;</div></div>' +
         '<div class="__g_score">' +
           '<div><div class="__g_big">' + (model.gwa === null ? '-' : model.gwa.toFixed(2)) + '</div><div class="__g_lbl">GWA (approx.)</div></div>' +
@@ -195,14 +197,68 @@ private val HOOK_JS = """
     back.onclick = closeSheet;
     sheet.querySelector('#__g_close').onclick = closeSheet;
 
+    var winH = function () { return window.innerHeight; };
+    var MAXH = 0.92, MINH = 0.42;
+    sheet.style.height = Math.round(winH() * 0.7) + 'px';
+
+    var dragging = false, moved = false, sy = 0, sh = 0, ly = 0, lt = 0, vy = 0;
+    function dStart(e) {
+      if (!e.touches || e.touches.length !== 1) return;
+      sy = ly = e.touches[0].clientY;
+      sh = sheet.offsetHeight;
+      lt = Date.now();
+      vy = 0;
+      moved = false;
+      dragging = true;
+      sheet.classList.add('__g_drag');
+    }
+    function dMove(e) {
+      if (!dragging) return;
+      var y = e.touches[0].clientY;
+      var dy = y - sy;
+      if (!moved && Math.abs(dy) < 6) return;
+      moved = true;
+      e.preventDefault();
+      var now = Date.now();
+      vy = (y - ly) / Math.max(1, now - lt);
+      ly = y; lt = now;
+      var h = Math.max(40, Math.min(sh - dy, winH() * MAXH));
+      sheet.style.height = h + 'px';
+    }
+    function dEnd() {
+      if (!dragging) return;
+      dragging = false;
+      sheet.classList.remove('__g_drag');
+      if (!moved) return;
+      var h = sheet.offsetHeight, H = winH();
+      if (vy > 0.9) {
+        if (h > H * 0.7) sheet.style.height = Math.round(H * 0.55) + 'px';
+        else closeSheet();
+      } else if (vy < -0.9) {
+        sheet.style.height = Math.round(H * MAXH) + 'px';
+      } else if (h < H * 0.34) {
+        closeSheet();
+      } else if (h < H * MINH) {
+        sheet.style.height = Math.round(H * MINH) + 'px';
+      }
+    }
+    [sheet.querySelector('.__g_hero'), sheet.querySelector('.__g_tabs')].forEach(function (el) {
+      el.addEventListener('touchstart', dStart, { passive: true });
+      el.addEventListener('touchmove', dMove, { passive: false });
+      el.addEventListener('touchend', dEnd, { passive: true });
+      el.addEventListener('touchcancel', dEnd, { passive: true });
+    });
+
     try { AppLink.onSheetState(true); } catch (e) {}
     setTimeout(function () {
       back.style.opacity = '1';
-      sheet.style.transform = 'translateY(0)';
+      sheet.style.opacity = '1';
+      sheet.style.transform = 'scale(1)';
     }, 30);
   };
 
   var TARGET = String.fromCharCode(99,117,114,114,101,118,97,108);
+  var CE_LABEL = String.fromCharCode(67,117,114,114,105,99,117,108,117,109,32,69,118,97,108,117,97,116,105,111,110);
   var autoFlowActive = false;
 
   function findLeafByText(text) {
@@ -308,7 +364,7 @@ private val HOOK_JS = """
         if (autoFlowActive) {
           autoFlowActive = false;
           setTimeout(function () {
-            closeTab('Curriculum Evaluation');
+            closeTab(CE_LABEL);
             setTimeout(function () {
               try { AppLink.onAutoFlowDone(); } catch (e) {}
             }, 300);
@@ -363,7 +419,7 @@ private val HOOK_JS = """
       }
       simulateClick(reportsEl);
       setTimeout(function () {
-        waitFor('Curriculum Evaluation', 8000, function (ceEl) {
+        waitFor(CE_LABEL, 8000, function (ceEl) {
           if (!ceEl) {
             autoFlowActive = false;
             try { AppLink.onAutoClickFallback(); } catch (e) {}
@@ -402,7 +458,7 @@ private val HOOK_JS = """
 // spins continuously via a rotation animation.
 private class IosSpinner(context: Context) : View(context) {
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = PURPLE_MID
+        color = Color.BLACK
         style = Paint.Style.FILL
     }
 
@@ -411,7 +467,7 @@ private class IosSpinner(context: Context) : View(context) {
         val cy = height / 2f
         val outerR = width / 2f * 0.92f
         val innerR = outerR * 0.5f
-        val tickWidth = width * 0.09f
+        val tickWidth = width * 0.1f
         val ticks = 12
         for (i in 0 until ticks) {
             paint.alpha = (255 * (i + 1) / ticks.toFloat()).toInt()
@@ -500,12 +556,12 @@ class MainActivity : Activity() {
             visibility = View.GONE
         }
         spinner = IosSpinner(this)
-        val size = dp(44)
+        val size = dp(22)
         loadingOverlay.addView(spinner, FrameLayout.LayoutParams(size, size, Gravity.CENTER))
         ObjectAnimator.ofFloat(spinner, "rotation", 0f, 360f).apply {
-            duration = 900
+            duration = 1000
             repeatCount = ObjectAnimator.INFINITE
-            interpolator = LinearInterpolator()
+            interpolator = TimeInterpolator { (it * 12).toInt() / 12f }
             start()
         }
         root.addView(loadingOverlay, FrameLayout.LayoutParams(MATCH, MATCH))
@@ -521,9 +577,9 @@ class MainActivity : Activity() {
 
     private fun buildFab() {
         fab = ImageView(this).apply {
-            setImageResource(R.drawable.ic_atom)
+            setImageResource(R.drawable.ic_logo_g)
             contentDescription = "Grades"
-            setPadding(dp(14), dp(14), dp(14), dp(14))
+            setPadding(dp(13), dp(13), dp(13), dp(13))
             background = purpleGradient(GradientDrawable.Orientation.TL_BR).apply {
                 shape = GradientDrawable.OVAL
                 setStroke(dp(1), 0x66C4B5FD)
@@ -647,7 +703,7 @@ class MainActivity : Activity() {
                 val first = lastJson == null
                 lastJson = json
                 showFab()
-                if (first) showBanner("Grades ready", "Tap the atom button to view them")
+                if (first) showBanner("Grades ready", "Tap the G button to view them")
             }
         }
 
@@ -707,7 +763,7 @@ class MainActivity : Activity() {
                 if (lastJson == null) {
                     showBanner(
                         "Couldn't load automatically",
-                        "Open Reports \u203A Curriculum Evaluation once to load your grades"
+                        "Open your grades report once to load them"
                     )
                 }
             }
