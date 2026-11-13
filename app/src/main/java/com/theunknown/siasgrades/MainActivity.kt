@@ -26,17 +26,11 @@ private const val SIAS_URL = "https://icloudph.com/prmsu-main/sias/"
 private const val MATCH = ViewGroup.LayoutParams.MATCH_PARENT
 private const val WRAP = ViewGroup.LayoutParams.WRAP_CONTENT
 
-// Purple palette
 private const val PURPLE_LIGHT = 0xFF6D28D9.toInt()
 private const val PURPLE_MID = 0xFF4C1D95.toInt()
 private const val PURPLE_DARK = 0xFF2E1065.toInt()
 private const val PURPLE_DEEP = 0xFF12062B.toInt()
 
-// Injected on every page load.
-// 1. Hooks fetch/XHR and sends the "curreval" response to the app (SiasBridge.onGrades).
-// 2. Defines window.__showGrades(text) which draws the grades sheet.
-// 3. Watches for the login form disappearing to tell the app the user logged in.
-// Real grade = Previous[last].Grade / 100, units = Units / 100 (top-level Grade is scrambled).
 private val HOOK_JS = """
 (function () {
   if (window.__curevalHooked) return;
@@ -145,7 +139,7 @@ private val HOOK_JS = """
     var back = document.getElementById('__g_back');
     var sheet = document.getElementById('__g_sheet');
     if (!sheet) return;
-    try { SiasBridge.onSheetState(false); } catch (e) {}
+    try { AppLink.onSheetState(false); } catch (e) {}
     sheet.style.transform = 'translateY(100%)';
     if (back) back.style.opacity = '0';
     setTimeout(removeNow, 320);
@@ -196,18 +190,19 @@ private val HOOK_JS = """
     back.onclick = closeSheet;
     sheet.querySelector('#__g_close').onclick = closeSheet;
 
-    try { SiasBridge.onSheetState(true); } catch (e) {}
+    try { AppLink.onSheetState(true); } catch (e) {}
     setTimeout(function () {
       back.style.opacity = '1';
       sheet.style.transform = 'translateY(0)';
     }, 30);
   };
 
-  // ---- capture the curreval response ----
+  var TARGET = String.fromCharCode(99,117,114,114,101,118,97,108);
+
   function capture(text) {
     try {
       var d = JSON.parse(text);
-      if (d && Array.isArray(d.Data)) SiasBridge.onGrades(text);
+      if (d && Array.isArray(d.Data)) AppLink.onGrades(text);
     } catch (e) {}
   }
 
@@ -215,10 +210,10 @@ private val HOOK_JS = """
   window.fetch = function () {
     var url = (arguments[0] && arguments[0].url) || String(arguments[0]);
     if (String(url).toLowerCase().indexOf('logout') !== -1) {
-      try { SiasBridge.onLogout(); } catch (e) {}
+      try { AppLink.onLogout(); } catch (e) {}
     }
     var p = origFetch.apply(this, arguments);
-    if (url.indexOf('curreval') !== -1) {
+    if (url.indexOf(TARGET) !== -1) {
       p.then(function (res) { return res.clone().text(); }).then(capture).catch(function () {});
     }
     return p;
@@ -227,27 +222,25 @@ private val HOOK_JS = """
   var origOpen = XMLHttpRequest.prototype.open;
   XMLHttpRequest.prototype.open = function (method, url) {
     if (String(url).toLowerCase().indexOf('logout') !== -1) {
-      try { SiasBridge.onLogout(); } catch (e) {}
+      try { AppLink.onLogout(); } catch (e) {}
     }
-    if (String(url).indexOf('curreval') !== -1) {
+    if (String(url).indexOf(TARGET) !== -1) {
       this.addEventListener('load', function () { capture(this.responseText); });
     }
     return origOpen.apply(this, arguments);
   };
 
-  // ---- logout detection: tapping an element labelled Logout / Sign out ----
   document.addEventListener('click', function (e) {
     var el = e.target;
     for (var i = 0; el && i < 4; i++, el = el.parentElement) {
       var t = (el.textContent || '').trim().toLowerCase().replace(/\s/g, '');
       if (t === 'logout' || t === 'signout') {
-        try { SiasBridge.onLogout(); } catch (err) {}
+        try { AppLink.onLogout(); } catch (err) {}
         return;
       }
     }
   }, true);
 
-  // ---- login detection: the password field was on screen, then went away ----
   var PW = 'input[type=password],input[name*=pass i],input[id*=pass i],input[placeholder*=pass i]';
   var seenLogin = false, misses = 0;
   function findPw() {
@@ -263,17 +256,99 @@ private val HOOK_JS = """
       misses = 0;
       if (!seenLogin) {
         seenLogin = true;
-        try { SiasBridge.onLoginScreen(); } catch (e) {}
+        try { AppLink.onLoginScreen(); } catch (e) {}
       }
     } else if (seenLogin) {
       misses++;
       if (misses >= 2) {
         seenLogin = false;
         misses = 0;
-        try { SiasBridge.onLoggedIn(); } catch (e) {}
+        try { AppLink.onLoggedIn(); } catch (e) {}
       }
     }
   }, 800);
+})();
+""".trimIndent()
+
+private val BG_HOOK_JS = """
+(function () {
+  if (window.__bgHooked) return;
+  window.__bgHooked = true;
+
+  var TARGET = String.fromCharCode(99,117,114,114,101,118,97,108);
+
+  function capture(text) {
+    try {
+      var d = JSON.parse(text);
+      if (d && Array.isArray(d.Data)) AppLink.onGrades(text);
+    } catch (e) {}
+  }
+
+  var origFetch = window.fetch;
+  window.fetch = function () {
+    var url = (arguments[0] && arguments[0].url) || String(arguments[0]);
+    var p = origFetch.apply(this, arguments);
+    if (url.indexOf(TARGET) !== -1) {
+      p.then(function (res) { return res.clone().text(); }).then(capture).catch(function () {});
+    }
+    return p;
+  };
+
+  var origOpen = XMLHttpRequest.prototype.open;
+  XMLHttpRequest.prototype.open = function (method, url) {
+    if (String(url).indexOf(TARGET) !== -1) {
+      this.addEventListener('load', function () { capture(this.responseText); });
+    }
+    return origOpen.apply(this, arguments);
+  };
+
+  function findLeafByText(text) {
+    var all = document.querySelectorAll('div,span');
+    for (var i = 0; i < all.length; i++) {
+      var el = all[i];
+      if (el.children.length === 0 && el.textContent.trim() === text) return el;
+    }
+    return null;
+  }
+
+  function simulateClick(el) {
+    var r = el.getBoundingClientRect();
+    var x = r.left + r.width / 2, y = r.top + r.height / 2;
+    ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'].forEach(function (type) {
+      var isPointer = type.indexOf('pointer') === 0;
+      var opts = { bubbles: true, cancelable: true, clientX: x, clientY: y };
+      var ev;
+      try {
+        ev = isPointer ? new PointerEvent(type, Object.assign({ pointerId: 1, isPrimary: true }, opts))
+                        : new MouseEvent(type, opts);
+      } catch (e) {
+        ev = new MouseEvent(type, opts);
+      }
+      el.dispatchEvent(ev);
+    });
+  }
+
+  function waitFor(text, timeoutMs, cb) {
+    var start = Date.now();
+    (function poll() {
+      var el = findLeafByText(text);
+      if (el) return cb(el);
+      if (Date.now() - start > timeoutMs) return cb(null);
+      setTimeout(poll, 150);
+    })();
+  }
+
+  setTimeout(function () {
+    waitFor('Reports', 8000, function (reportsEl) {
+      if (!reportsEl) return;
+      simulateClick(reportsEl);
+      setTimeout(function () {
+        waitFor('Curriculum Evaluation', 6000, function (ceEl) {
+          if (ceEl) simulateClick(ceEl);
+        });
+      }, 500);
+    });
+  }, 1200);
 })();
 """.trimIndent()
 
@@ -307,6 +382,11 @@ class MainActivity : Activity() {
         root.setBackgroundColor(PURPLE_DEEP)
         web = WebView(this)
         root.addView(web, FrameLayout.LayoutParams(MATCH, MATCH))
+
+        bgWeb = WebView(this)
+        bgWeb.visibility = View.GONE
+        root.addView(bgWeb, FrameLayout.LayoutParams(1, 1))
+
         buildFab()
         buildBanner()
         setContentView(root)
@@ -320,16 +400,14 @@ class MainActivity : Activity() {
         web.settings.builtInZoomControls = true
         web.settings.displayZoomControls = false
 
-        web.addJavascriptInterface(Bridge(), "SiasBridge")
+        web.addJavascriptInterface(Bridge(), "AppLink")
 
         web.webViewClient = object : WebViewClient() {
             override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
-                // Landing on a logout/login page means the session ended
                 val u = (url ?: "").lowercase()
                 if (u.contains("logout") || u.contains("login") || u.contains("signin")) {
                     clearSession()
                 }
-                // A fresh page means any open sheet is gone
                 sheetOpen = false
                 if (lastJson != null) showFab()
                 view.evaluateJavascript(HOOK_JS, null)
@@ -341,9 +419,24 @@ class MainActivity : Activity() {
         }
 
         web.loadUrl(SIAS_URL)
+
+        bgWeb.settings.javaScriptEnabled = true
+        bgWeb.settings.domStorageEnabled = true
+        bgWeb.addJavascriptInterface(Bridge(), "AppLink")
+        bgWeb.webViewClient = object : WebViewClient() {
+            override fun onPageFinished(view: WebView, url: String?) {
+                view.evaluateJavascript(BG_HOOK_JS, null)
+            }
+        }
     }
 
-    // ---------- floating atom button ----------
+    private fun fetchGradesInBackground() {
+        if (bgFetchInFlight) return
+        bgFetchInFlight = true
+        bgWeb.loadUrl(SIAS_URL)
+        handler.postDelayed({ bgFetchInFlight = false }, 20000)
+    }
+
     private fun buildFab() {
         fab = ImageView(this).apply {
             setImageResource(R.drawable.ic_atom)
@@ -377,13 +470,14 @@ class MainActivity : Activity() {
         fab.visibility = View.GONE
     }
 
-    // Forget everything about the current user so the next login starts clean
     private fun clearSession() {
         val hadData = lastJson != null
         lastJson = null
         sheetOpen = false
+        bgFetchInFlight = false
         hideFab()
         web.evaluateJavascript("window.__hideGrades && window.__hideGrades()", null)
+        bgWeb.loadUrl("about:blank")
         if (hadData) showBanner("Logged out", "Your grades were cleared from the app")
     }
 
@@ -395,7 +489,6 @@ class MainActivity : Activity() {
         )
     }
 
-    // ---------- sliding banner from the top ----------
     private fun buildBanner() {
         bannerIcon = TextView(this).apply {
             text = "\u2713"
@@ -465,7 +558,6 @@ class MainActivity : Activity() {
             .start()
     }
 
-    // ---------- called from the page's JavaScript ----------
     inner class Bridge {
         @JavascriptInterface
         fun onGrades(json: String) {
@@ -480,7 +572,8 @@ class MainActivity : Activity() {
         @JavascriptInterface
         fun onLoggedIn() {
             runOnUiThread {
-                showBanner("You're logged in", "Go to Reports \u203A Curriculum Evaluation to see your grades")
+                showBanner("You're logged in", "Fetching your grades\u2026")
+                fetchGradesInBackground()
             }
         }
 
@@ -503,7 +596,6 @@ class MainActivity : Activity() {
         }
     }
 
-    // Back order: close grades sheet -> go back in the site -> press twice to exit
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
         web.evaluateJavascript("(window.__hideGrades ? window.__hideGrades() : false)") { result ->
