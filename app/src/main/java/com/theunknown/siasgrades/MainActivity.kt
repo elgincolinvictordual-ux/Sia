@@ -340,15 +340,22 @@ private val BG_HOOK_JS = """
 
   setTimeout(function () {
     waitFor('Reports', 8000, function (reportsEl) {
-      if (!reportsEl) return;
+      if (!reportsEl) {
+        try { AppLink.onBgFallback(); } catch (e) {}
+        return;
+      }
       simulateClick(reportsEl);
       setTimeout(function () {
         waitFor('Curriculum Evaluation', 6000, function (ceEl) {
-          if (ceEl) simulateClick(ceEl);
+          if (!ceEl) {
+            try { AppLink.onBgFallback(); } catch (e) {}
+            return;
+          }
+          simulateClick(ceEl);
         });
       }, 500);
     });
-  }, 1200);
+  }, 1800);
 })();
 """.trimIndent()
 
@@ -386,8 +393,8 @@ class MainActivity : Activity() {
         root.addView(web, FrameLayout.LayoutParams(MATCH, MATCH))
 
         bgWeb = WebView(this)
-        bgWeb.visibility = View.GONE
-        root.addView(bgWeb, FrameLayout.LayoutParams(1, 1))
+        bgWeb.visibility = View.INVISIBLE
+        root.addView(bgWeb, FrameLayout.LayoutParams(MATCH, MATCH))
 
         buildFab()
         buildBanner()
@@ -424,6 +431,9 @@ class MainActivity : Activity() {
 
         bgWeb.settings.javaScriptEnabled = true
         bgWeb.settings.domStorageEnabled = true
+        bgWeb.settings.useWideViewPort = true
+        bgWeb.settings.loadWithOverviewMode = true
+        bgWeb.settings.textZoom = 100
         bgWeb.addJavascriptInterface(Bridge(), "AppLink")
         bgWeb.webViewClient = object : WebViewClient() {
             override fun onPageFinished(view: WebView, url: String?) {
@@ -594,6 +604,18 @@ class MainActivity : Activity() {
             runOnUiThread {
                 sheetOpen = open
                 if (open) hideFab() else if (lastJson != null) showFab()
+            }
+        }
+
+        @JavascriptInterface
+        fun onBgFallback() {
+            runOnUiThread {
+                if (lastJson == null) {
+                    showBanner(
+                        "Couldn't load automatically",
+                        "Open Reports \u203A Curriculum Evaluation once to load your grades"
+                    )
+                }
             }
         }
     }
