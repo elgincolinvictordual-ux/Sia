@@ -23,7 +23,6 @@ import android.widget.TextView
 import org.json.JSONObject
 
 private const val SIAS_URL = "https://icloudph.com/prmsu-main/sias/"
-private const val DEBUG_BG = true
 private const val MATCH = ViewGroup.LayoutParams.MATCH_PARENT
 private const val WRAP = ViewGroup.LayoutParams.WRAP_CONTENT
 
@@ -242,67 +241,6 @@ private val HOOK_JS = """
     }
   }, true);
 
-  var PW = 'input[type=password],input[name*=pass i],input[id*=pass i],input[placeholder*=pass i]';
-  var seenLogin = false, misses = 0;
-  function findPw() {
-    var list = document.querySelectorAll(PW);
-    for (var i = 0; i < list.length; i++) {
-      if (list[i].isConnected && list[i].getClientRects().length > 0) return list[i];
-    }
-    return null;
-  }
-  setInterval(function () {
-    if (!document.body) return;
-    if (findPw()) {
-      misses = 0;
-      if (!seenLogin) {
-        seenLogin = true;
-        try { AppLink.onLoginScreen(); } catch (e) {}
-      }
-    } else if (seenLogin) {
-      misses++;
-      if (misses >= 2) {
-        seenLogin = false;
-        misses = 0;
-        try { AppLink.onLoggedIn(); } catch (e) {}
-      }
-    }
-  }, 800);
-})();
-""".trimIndent()
-
-private val BG_HOOK_JS = """
-(function () {
-  if (window.__bgHooked) return;
-  window.__bgHooked = true;
-
-  var TARGET = String.fromCharCode(99,117,114,114,101,118,97,108);
-
-  function capture(text) {
-    try {
-      var d = JSON.parse(text);
-      if (d && Array.isArray(d.Data)) AppLink.onGrades(text);
-    } catch (e) {}
-  }
-
-  var origFetch = window.fetch;
-  window.fetch = function () {
-    var url = (arguments[0] && arguments[0].url) || String(arguments[0]);
-    var p = origFetch.apply(this, arguments);
-    if (url.indexOf(TARGET) !== -1) {
-      p.then(function (res) { return res.clone().text(); }).then(capture).catch(function () {});
-    }
-    return p;
-  };
-
-  var origOpen = XMLHttpRequest.prototype.open;
-  XMLHttpRequest.prototype.open = function (method, url) {
-    if (String(url).indexOf(TARGET) !== -1) {
-      this.addEventListener('load', function () { capture(this.responseText); });
-    }
-    return origOpen.apply(this, arguments);
-  };
-
   function findLeafByText(text) {
     var all = document.querySelectorAll('div,span');
     for (var i = 0; i < all.length; i++) {
@@ -339,31 +277,58 @@ private val BG_HOOK_JS = """
     })();
   }
 
-  setTimeout(function () {
-    waitFor('Reports', 20000, function (reportsEl) {
+  function autoOpenReport() {
+    waitFor('Reports', 10000, function (reportsEl) {
       if (!reportsEl) {
-        try { AppLink.onBgFallback(); } catch (e) {}
+        try { AppLink.onAutoClickFallback(); } catch (e) {}
         return;
       }
       simulateClick(reportsEl);
       setTimeout(function () {
-        waitFor('Curriculum Evaluation', 15000, function (ceEl) {
+        waitFor('Curriculum Evaluation', 8000, function (ceEl) {
           if (!ceEl) {
-            try { AppLink.onBgFallback(); } catch (e) {}
+            try { AppLink.onAutoClickFallback(); } catch (e) {}
             return;
           }
           simulateClick(ceEl);
         });
       }, 500);
     });
-  }, 1800);
+  }
+
+  var PW = 'input[type=password],input[name*=pass i],input[id*=pass i],input[placeholder*=pass i]';
+  var seenLogin = false, misses = 0;
+  function findPw() {
+    var list = document.querySelectorAll(PW);
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].isConnected && list[i].getClientRects().length > 0) return list[i];
+    }
+    return null;
+  }
+  setInterval(function () {
+    if (!document.body) return;
+    if (findPw()) {
+      misses = 0;
+      if (!seenLogin) {
+        seenLogin = true;
+        try { AppLink.onLoginScreen(); } catch (e) {}
+      }
+    } else if (seenLogin) {
+      misses++;
+      if (misses >= 2) {
+        seenLogin = false;
+        misses = 0;
+        try { AppLink.onLoggedIn(); } catch (e) {}
+        setTimeout(autoOpenReport, 1200);
+      }
+    }
+  }, 800);
 })();
 """.trimIndent()
 
 class MainActivity : Activity() {
     private lateinit var root: FrameLayout
     private lateinit var web: WebView
-    private lateinit var bgWeb: WebView
     private lateinit var fab: ImageView
     private lateinit var banner: LinearLayout
     private lateinit var bannerIcon: TextView
@@ -372,7 +337,6 @@ class MainActivity : Activity() {
 
     private var lastJson: String? = null
     private var sheetOpen = false
-    private var bgFetchInFlight = false
     private var lastBackPress = 0L
     private val handler = Handler(Looper.getMainLooper())
     private val hideBannerTask = Runnable { dismissBanner() }
@@ -392,17 +356,6 @@ class MainActivity : Activity() {
         root.setBackgroundColor(PURPLE_DEEP)
         web = WebView(this)
         root.addView(web, FrameLayout.LayoutParams(MATCH, MATCH))
-
-        bgWeb = WebView(this)
-        if (DEBUG_BG) {
-            val lp = FrameLayout.LayoutParams(dp(260), dp(460), Gravity.TOP or Gravity.START)
-            lp.setMargins(dp(8), dp(90), 0, 0)
-            bgWeb.setBackgroundColor(Color.YELLOW)
-            root.addView(bgWeb, lp)
-        } else {
-            bgWeb.visibility = View.INVISIBLE
-            root.addView(bgWeb, FrameLayout.LayoutParams(MATCH, MATCH))
-        }
 
         buildFab()
         buildBanner()
@@ -436,25 +389,6 @@ class MainActivity : Activity() {
         }
 
         web.loadUrl(SIAS_URL)
-
-        bgWeb.settings.javaScriptEnabled = true
-        bgWeb.settings.domStorageEnabled = true
-        bgWeb.settings.useWideViewPort = true
-        bgWeb.settings.loadWithOverviewMode = true
-        bgWeb.settings.textZoom = 100
-        bgWeb.addJavascriptInterface(Bridge(), "AppLink")
-        bgWeb.webViewClient = object : WebViewClient() {
-            override fun onPageFinished(view: WebView, url: String?) {
-                view.evaluateJavascript(BG_HOOK_JS, null)
-            }
-        }
-    }
-
-    private fun fetchGradesInBackground() {
-        if (bgFetchInFlight) return
-        bgFetchInFlight = true
-        bgWeb.loadUrl(SIAS_URL)
-        handler.postDelayed({ bgFetchInFlight = false }, 20000)
     }
 
     private fun buildFab() {
@@ -494,10 +428,8 @@ class MainActivity : Activity() {
         val hadData = lastJson != null
         lastJson = null
         sheetOpen = false
-        bgFetchInFlight = false
         hideFab()
         web.evaluateJavascript("window.__hideGrades && window.__hideGrades()", null)
-        bgWeb.loadUrl("about:blank")
         if (hadData) showBanner("Logged out", "Your grades were cleared from the app")
     }
 
@@ -593,7 +525,6 @@ class MainActivity : Activity() {
         fun onLoggedIn() {
             runOnUiThread {
                 showBanner("You're logged in", "Fetching your grades\u2026")
-                fetchGradesInBackground()
             }
         }
 
@@ -616,7 +547,7 @@ class MainActivity : Activity() {
         }
 
         @JavascriptInterface
-        fun onBgFallback() {
+        fun onAutoClickFallback() {
             runOnUiThread {
                 if (lastJson == null) {
                     showBanner(
