@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Used only as the window background (see styles.xml), so the very first
+     frame the OS draws before the Activity's own views are ready already
+     looks like the real white-with-spinner loading screen. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@color/launch_bg" />
+    <item android:width="22dp" android:height="22dp" android:gravity="center">
+        <bitmap android:src="@drawable/ic_spinner_static" android:gravity="center" />
+    </item>
+</layer-list>
