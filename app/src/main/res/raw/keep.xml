@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Tells the release build's resource shrinker to never remove these,
+     regardless of how they're referenced. Added after a real crash where
+     a drawable referenced only from inside another drawable's XML (not
+     from Kotlin code) got silently stripped as "unused". -->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@drawable/ic_launcher_background,@drawable/ic_launcher_foreground,@drawable/ic_logo_g" />
