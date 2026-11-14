@@ -120,21 +120,21 @@ class MainActivity : Activity() {
     // never want that to block a legitimate user from using their own app.
     private fun isSignatureTrusted(): Boolean {
         return try {
-        val sig: ByteArray = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            val info = packageManager.getPackageInfo(packageName, PackageManager.GET_SIGNING_CERTIFICATES)
-            val signers = info.signingInfo?.apkContentsSigners
-            if (signers.isNullOrEmpty()) return true
-            signers[0].toByteArray()
-        } else {
-            @Suppress("DEPRECATION")
-            val info = packageManager.getPackageInfo(packageName, PackageManager.GET_SIGNATURES)
-            @Suppress("DEPRECATION")
-            val signers = info.signatures
-            if (signers.isNullOrEmpty()) return true
-            signers[0].toByteArray()
-        }
-        val hex = MessageDigest.getInstance("SHA-256").digest(sig).joinToString("") { "%02x".format(it) }
-        hex.equals(EXPECTED_CERT_SHA256, ignoreCase = true)
+            val sig: ByteArray = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                val info = packageManager.getPackageInfo(packageName, PackageManager.GET_SIGNING_CERTIFICATES)
+                val signers = info.signingInfo?.apkContentsSigners
+                if (signers.isNullOrEmpty()) return true
+                signers[0].toByteArray()
+            } else {
+                @Suppress("DEPRECATION")
+                val info = packageManager.getPackageInfo(packageName, PackageManager.GET_SIGNATURES)
+                @Suppress("DEPRECATION")
+                val signers = info.signatures
+                if (signers.isNullOrEmpty()) return true
+                signers[0].toByteArray()
+            }
+            val hex = MessageDigest.getInstance("SHA-256").digest(sig).joinToString("") { "%02x".format(it) }
+            hex.equals(EXPECTED_CERT_SHA256, ignoreCase = true)
         } catch (e: Exception) {
             true
         }
