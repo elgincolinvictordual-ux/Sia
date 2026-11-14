@@ -556,6 +556,7 @@ class MainActivity : Activity() {
     private lateinit var bannerText: TextView
 
     private var lastJson: String? = null
+    private var firstLoadDone = false
     private var sheetOpen = false
     private var lastBackPress = 0L
     private val handler = Handler(Looper.getMainLooper())
@@ -610,9 +611,18 @@ class MainActivity : Activity() {
 
             override fun onPageFinished(view: WebView, url: String?) {
                 view.evaluateJavascript(HOOK_JS, null)
+                if (!firstLoadDone) {
+                    firstLoadDone = true
+                    hideLoadingOverlay()
+                    web.alpha = 1f
+                }
             }
         }
 
+        // Covered from the first frame, so the page's own blank-while-loading
+        // state (and the brief network wait) is never visible as white.
+        web.alpha = 0f
+        showLoadingOverlay()
         web.loadUrl(SIAS_URL)
     }
 
